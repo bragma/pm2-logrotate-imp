@@ -60,7 +60,8 @@ function delete_old(file) {
 }
 
 function proceed(file) {
-	var file_name_date = moment();
+	var file_name_date = currentConfig.MODE === 'system' ? moment() : moment.utc();
+	
 	var final_name = file.substr(0, file.length - 4) + '__'
 		+ file_name_date.format(DATE_FORMAT) + '.log';
 

@@ -15,6 +15,7 @@ var SIZE_LIMIT_DEFAULT = '10MB';
 var INTERVAL_UNIT_DEFAULT = 'day';
 var INTERVAL_DEFAULT = '1';
 var RETAIN_DEFAULT = 'none';
+var MODE_DEFAULT = 'system';
 
 function parseMaxSize(max_size) {
 	var parsed_size_limit = filesizeParser(max_size);
@@ -52,6 +53,16 @@ function parseRetain(retain) {
 	if (isNaN(parsed_retain) || parsed_retain < 0) {
 		throw new Error(util.format("Invalid configuration value 'retain' (%s)", retain));
 	}
+	
+	return parsed_retain;
+}
+
+function parseMode(mode) {
+	if (mode !== 'system' && mode !== 'utc') {
+		throw new Error(util.format("Invalid configuration value 'mode' (%s)", mode));
+	}
+	
+	return mode;
 }
 
 function parseConfig(conf) {
@@ -60,8 +71,13 @@ function parseConfig(conf) {
 		SIZE_LIMIT: parseMaxSize(SIZE_LIMIT_DEFAULT),
 		INTERVAL_UNIT: parseIntervalUnit(INTERVAL_UNIT_DEFAULT),
 		INTERVAL: parseInterval(INTERVAL_DEFAULT),
-		RETAIN: parseRetain(RETAIN_DEFAULT) 
+		RETAIN: parseRetain(RETAIN_DEFAULT),
+		MODE: parseMode(MODE_DEFAULT)
 	};
+
+	function log_using_default(err, value) {
+		console.error(util.format("%s, using default (%s)", err.message, parsedConf.SIZE_LIMIT));
+	}
 	
 	// Maximum file size. If the file is found to be larger than this, it will be truncated
 	
@@ -70,7 +86,7 @@ function parseConfig(conf) {
 			parsedConf.SIZE_LIMIT = parseMaxSize(conf.max_size);
 		}
 		catch (err) {
-			console.error(util.format("%s, using default (%s)", err.message, parsedConf.SIZE_LIMIT));
+			log_using_default(err, parsedConf.SIZE_LIMIT);
 		}
 	}
 			
@@ -81,7 +97,7 @@ function parseConfig(conf) {
 			parsedConf.INTERVAL_UNIT = parseIntervalUnit(conf.interval_unit);
 		}
 		catch (err) {
-			console.error(util.format("%s, using default (%s)", err.message, parsedConf.INTERVAL_UNIT));
+			log_using_default(err, parsedConf.INTERVAL_UNIT);
 		}
 	}
 	
@@ -91,7 +107,7 @@ function parseConfig(conf) {
 			parsedConf.INTERVAL = parseInterval(conf.interval);
 		}
 		catch (err) {
-			console.error(util.format("%s, using default (%s)", err.message, parsedConf.INTERVAL));
+			log_using_default(err, parsedConf.INTERVAL);
 		}
 	}
 			
@@ -101,7 +117,16 @@ function parseConfig(conf) {
 			parsedConf.RETAIN = parseRetain(conf.retain);
 		}
 		catch (err) {
-			console.error(util.format("%s, using default (%s)", err.message, parsedConf.RETAIN));
+			log_using_default(err, parsedConf.RETAIN);
+		}
+	}
+	
+	if ('mode' in conf) {
+		try {
+			parsedConf.MODE = parseMode(conf.mode);
+		}
+		catch (err) {
+			log_using_default(err, parsedConf.MODE);
 		}
 	}
 
@@ -113,4 +138,5 @@ function logConfig(conf) {
 	console.log('INTERVAL_UNIT', conf.INTERVAL_UNIT);
 	console.log('INTERVAL', conf.INTERVAL);
 	console.log('RETAIN', conf.RETAIN);
+	console.log('MODE', conf.MODE)
 }
