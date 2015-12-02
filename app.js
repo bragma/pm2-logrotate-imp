@@ -32,10 +32,7 @@ var WORKER_INTERVAL = moment.duration(50, 'seconds').asMilliseconds();
 
 var currentConfig = Config.parse(moduleConfig);
 
-// Format for the date in retained file names
-var DATE_FORMAT = 'YYYY-MM-DD-HH-mm';
-
-var BEGIN = moment().startOf(currentConfig.INTERVAL_UNIT);
+var BEGIN = moment().startOf(currentConfig.interval_unit);
 var gl_file_list = [];
 
 function delete_old(file) {
@@ -52,7 +49,7 @@ function delete_old(file) {
 		rotated_files.sort().reverse();
 
 		for (var i = rotated_files.length - 1; i >= 0; i--) {
-			if (currentConfig.RETAIN > i) { break; }
+			if (currentConfig.retain > i) { break; }
 			fs.unlink(rotated_files[i]);
 			console.log('"' + rotated_files[i] + '" has been deleted');
 		};
@@ -60,10 +57,10 @@ function delete_old(file) {
 }
 
 function proceed(file) {
-	var file_name_date = currentConfig.MODE === 'system' ? moment() : moment.utc();
+	var file_name_date = currentConfig.mode === 'system' ? moment() : moment.utc();
 	
 	var final_name = file.substr(0, file.length - 4) + '__'
-		+ file_name_date.format(DATE_FORMAT) + '.log';
+		+ file_name_date.format(currentConfig.date_format) + '.log';
 
 	var readStream = fs.createReadStream(file);
 	var writeStream = fs.createWriteStream(final_name, { 'flags': 'a' });
@@ -72,7 +69,7 @@ function proceed(file) {
 		fs.truncateSync(file, 0);
 		console.log('"' + final_name + '" has been created');
 
-		if (currentConfig.RETAIN) {
+		if (currentConfig.retain) {
 			delete_old(file);
 		}
 	});
@@ -86,7 +83,7 @@ function proceed_file(file, force) {
 
 	var size = fs.statSync(file).size;
 
-	if (size > 0 && (size >= currentConfig.SIZE_LIMIT || force)) {
+	if (size > 0 && (size >= currentConfig.max_size || force)) {
 		proceed(file);
 	}
 }
@@ -101,9 +98,9 @@ function proceed_app(app, force) {
 }
 
 function is_it_time_yet() {
-	var NOW = moment().startOf(currentConfig.INTERVAL_UNIT);
+	var NOW = moment().startOf(currentConfig.interval_unit);
 
-	if (NOW.diff(BEGIN, currentConfig.INTERVAL_UNIT) >= currentConfig.INTERVAL) {
+	if (NOW.diff(BEGIN, currentConfig.interval_unit) >= currentConfig.interval) {
 		BEGIN = NOW;
 		return true;
 	}

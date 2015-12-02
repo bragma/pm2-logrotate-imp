@@ -35,6 +35,7 @@
 		"interval": "1",
 		"max_size": "10M",
 		"retain": "none",
-		"mode": "system"
+		"mode": "system",
+		"date_format": "YYYY-MM-DD_HH-mm-ss"
 	}
 }
