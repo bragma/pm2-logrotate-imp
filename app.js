@@ -4,10 +4,11 @@ var pmx = require('pmx');
 var pm2 = require('pm2');
 var moment = require('moment');
 var Rolex = require('rolex');
-var filesizeParser = require('filesize-parser');
+
+var Config = require('./config');
 
 // Module configuration
-var conf = pmx.initModule({
+var moduleConfig = pmx.initModule({
 
 	widget: {
 		type: 'generic',
@@ -29,47 +30,13 @@ var conf = pmx.initModule({
 // Worker loop delay. Logs will be checked every WORKER_INTERVAL milliseconds
 var WORKER_INTERVAL = moment.duration(50, 'seconds').asMilliseconds();
 
-// All config properties are strings
-
-// Maximum file size. If the file is found to be larger than this, it will be truncated
-// Default to 10MB
-var SIZE_LIMIT = filesizeParser('10MB'); 
-try {
-	var parsed_size_limit =  filesizeParser(conf.max_size);
-	if (parsed_size_limit > 0) {
-		SIZE_LIMIT = parsed_size_limit;
-	}
-}
-catch(err) {
-}
-
-// Unit of time for the specified rotation interval. User Moment.js time units formats
-// Defaults to 'days'
-var INTERVAL_UNIT = conf.interval_unit || 'days';
-
-// Interval in INTERVAL_UNIT units
-// Default to 1
-var INTERVAL = parseInt(conf.interval) || 1;
-
-// How many files to retain or 'none'
-// Defaults to 'none' 
-var RETAIN = isNaN(parseInt(conf.retain)) ? undefined : parseInt(conf.retain);
-
-log_config();
+var currentConfig = Config.parse(moduleConfig);
 
 // Format for the date in retained file names
 var DATE_FORMAT = 'YYYY-MM-DD-HH-mm';
 
-var BEGIN = moment().startOf(INTERVAL_UNIT);
+var BEGIN = moment().startOf(currentConfig.INTERVAL_UNIT);
 var gl_file_list = [];
-
-
-function log_config() {
-	console.log('SIZE_LIMIT', SIZE_LIMIT);
-	console.log('INTERVAL_UNIT', INTERVAL_UNIT);
-	console.log('INTERVAL', INTERVAL);
-	console.log('RETAIN', RETAIN);
-}
 
 function delete_old(file) {
 	var fileBaseName = file.substr(0, file.length - 4) + '__';
@@ -85,7 +52,7 @@ function delete_old(file) {
 		rotated_files.sort().reverse();
 
 		for (var i = rotated_files.length - 1; i >= 0; i--) {
-			if (RETAIN > i) { break; }
+			if (currentConfig.RETAIN > i) { break; }
 			fs.unlink(rotated_files[i]);
 			console.log('"' + rotated_files[i] + '" has been deleted');
 		};
@@ -104,7 +71,7 @@ function proceed(file) {
 		fs.truncateSync(file, 0);
 		console.log('"' + final_name + '" has been created');
 
-		if (RETAIN !== undefined) {
+		if (currentConfig.RETAIN) {
 			delete_old(file);
 		}
 	});
@@ -118,7 +85,7 @@ function proceed_file(file, force) {
 
 	var size = fs.statSync(file).size;
 
-	if (size > 0 && (size >= SIZE_LIMIT || force)) {
+	if (size > 0 && (size >= currentConfig.SIZE_LIMIT || force)) {
 		proceed(file);
 	}
 }
@@ -133,9 +100,9 @@ function proceed_app(app, force) {
 }
 
 function is_it_time_yet() {
-	var NOW = moment().startOf(INTERVAL_UNIT);
-	
-	if (NOW.diff(BEGIN, INTERVAL_UNIT) >= INTERVAL) {
+	var NOW = moment().startOf(currentConfig.INTERVAL_UNIT);
+
+	if (NOW.diff(BEGIN, currentConfig.INTERVAL_UNIT) >= currentConfig.INTERVAL) {
 		BEGIN = NOW;
 		return true;
 	}
@@ -156,10 +123,8 @@ pm2.connect(function (err) {
 			proceed_file(process.env.HOME + '/.pm2/pm2.log', false);
 			proceed_file(process.env.HOME + '/.pm2/agent.log', false);
 
-			if (is_it_time_yet())
-				apps.forEach(function (app) { proceed_app(app, true) });
-			else
-				apps.forEach(function (app) { proceed_app(app, false) });
+			var force = is_it_time_yet();
+			apps.forEach(function (app) { proceed_app(app, force) });
 		});
 	};
 
