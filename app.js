@@ -55,13 +55,21 @@ var INTERVAL = parseInt(conf.interval) || 1;
 // Defaults to 'none' 
 var RETAIN = isNaN(parseInt(conf.retain)) ? undefined : parseInt(conf.retain);
 
+log_config();
+
 // Format for the date in retained file names
 var DATE_FORMAT = 'YYYY-MM-DD-HH-mm';
-
 
 var BEGIN = moment().startOf(INTERVAL_UNIT);
 var gl_file_list = [];
 
+
+function log_config() {
+	console.log('SIZE_LIMIT', SIZE_LIMIT);
+	console.log('INTERVAL_UNIT', INTERVAL_UNIT);
+	console.log('INTERVAL', INTERVAL);
+	console.log('RETAIN', RETAIN);
+}
 
 function delete_old(file) {
 	var fileBaseName = file.substr(0, file.length - 4) + '__';
