@@ -1,0 +1,35 @@
+{
+	"name": "pm2-logrotate-imp",
+	"version": "0.0.1",
+	"description": "pm2 module - configurable log rotator",
+	"main": "app.js",
+	"dependencies": {
+		"pmx": "^0.5.5"
+	},
+	"scripts": {
+		"test": "echo \"Error: no test specified\" && exit 1"
+	},
+	"author": "Marco Braga",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/bragma/pm2-logrotate-imp.git"
+	},
+	"bugs": {
+		"url": "https://github.com/bragma/pm2-logrotate-imp/issues"
+	},
+	"homepage": "https://github.com/bragma/pm2-logrotate-imp",
+	"apps": [
+		{
+			"merge_logs": true,
+			"max_memory_restart": "200M",
+			"script": "app.js"
+		}
+	],
+	"config": {
+		"interval_unit": "DD",
+		"interval": "1",
+		"max_size": "10M",
+		"retain": "none"
+	}
+}
