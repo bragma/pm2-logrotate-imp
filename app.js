@@ -1,9 +1,11 @@
-var fs = require('fs');
+var Promise = require('bluebird');
+var fs = Promise.promisifyAll(require('fs'));
 var path = require('path');
 var pmx = require('pmx');
 var pm2 = require('pm2');
 var moment = require('moment');
 var Rolex = require('rolex');
+
 
 var Config = require('./config');
 
@@ -35,57 +37,100 @@ var currentConfig = Config.parse(moduleConfig);
 var BEGIN = moment().startOf(currentConfig.interval_unit);
 var gl_file_list = [];
 
-function delete_old(file) {
+function delete_old(file, retain) {
 	var fileBaseName = file.substr(0, file.length - 4) + '__';
 	var readPath = path.join(path.dirname(fileBaseName), "/");
 
-	fs.readdir(readPath, function (err, files) {
-		var rotated_files = []
-		for (var i = 0, len = files.length; i < len; i++) {
-			if (fileBaseName === ((readPath + files[i]).substr(0, fileBaseName.length))) {
-				rotated_files.push(readPath + files[i])
-			}
-		}
-		rotated_files.sort().reverse();
+	return fs.readdirAsync(readPath)
+		.then(function(files) {
+			var rotated_files = files.filter(function(file) {
+				return fileBaseName === (readPath + file).substr(0, fileBaseName.length); 
+			}).sort().reverse();
 
-		for (var i = rotated_files.length - 1; i >= 0; i--) {
-			if (currentConfig.retain > i) { break; }
-			fs.unlink(rotated_files[i]);
-			console.log('"' + rotated_files[i] + '" has been deleted');
-		};
-	});
+			rotated_files.splice(retain);
+
+			return Promise.all(rotated_files, function(file) {
+				return fs.unlinkAsync(file)
+					.then(function() {
+						console.log('"' + file + '" has been deleted');
+					});
+			});		
+		});
+}
+
+
+function promisePipe(source, sink) {
+	var resolve, reject; 
+	return new Promise(function(resolve_, reject_) { 
+		resolve = resolve_; 
+		reject = reject_; 
+		source 
+			.on("end", resolve) 
+			.on("error", reject) 
+			.pipe(sink) 
+			.on("error", reject); 
+		}).finally(function() { 
+			source.removeListener("end", resolve); 
+			source.removeListener("error", reject); 
+			sink.removeListener("error", reject); 
+		}); 
 }
 
 function proceed(file) {
 	var file_name_date = currentConfig.date_mode === 'system' ? moment() : moment.utc();
-	
 	var final_name = file.substr(0, file.length - 4) + '__'
 		+ file_name_date.format(currentConfig.date_format) + '.log';
 
-	var readStream = fs.createReadStream(file);
-	var writeStream = fs.createWriteStream(final_name, { 'flags': 'a' });
-	readStream.pipe(writeStream);
-	readStream.on('end', function () {
-		fs.truncateSync(file, 0);
-		console.log('"' + final_name + '" has been created');
+	var rotateOp;
+	if (currentConfig.rotation_mode === 'reopen') {
+		rotateOp = fs.renameAsync(file, final_name);
+	} else {
+		rotateOp = promisePipe(
+				fs.createReadStream(file),
+				fs.createWriteStream(final_name, { 'flags': 'a' }))
+			.then(function() {
+				return fs.truncateAsync(file, 0);
+			});
+	}
+	
+	return rotateOp
+		.then(function() {
+			console.log('"' + final_name + '" has been created');
 
-		if (currentConfig.retain) {
-			delete_old(file);
-		}
-	});
+			if (currentConfig.retain !== undefined) {
+				return delete_old(file, currentConfig.retain);
+			}
+			
+			return Promise.resolve();
+		});
 }
 
 function proceed_file(file, force) {
-	if (!fs.existsSync(file))
-		return;
-
-	gl_file_list.push(file);
-
-	var size = fs.statSync(file).size;
-
-	if (size > 0 && (size >= currentConfig.max_size || force)) {
-		proceed(file);
-	}
+	
+	return fs.existsAsync(file)
+		.then(function(exists) {
+			if (!exists) {
+				return Promise.resolve(false);
+			}
+				
+			gl_file_list.push(file);
+			
+			if (force) {
+				return proceed(file)
+					.return(true);
+			}
+			
+			return fs.statAsync(file)
+				.get('size')
+				.then(function(size) {
+					if (size < currentConfig.max_size) {
+						return Promise.resolve(false);
+					}
+					
+					return proceed(file)
+						.return(true);
+				});
+		});
 }
 
 function proceed_app(app, force) {
@@ -93,8 +138,10 @@ function proceed_app(app, force) {
 	var out_file = app.pm2_env.pm_out_log_path;
 	var err_file = app.pm2_env.pm_err_log_path;
 
-	proceed_file(out_file, force);
-	proceed_file(err_file, force);
+	return Promise.join(
+		proceed_file(out_file, force),
+		proceed_file(err_file, force)
+	);
 }
 
 function is_it_time_yet() {
@@ -116,13 +163,27 @@ pm2.connect(function (err) {
 	function worker() {
 		// Get process list managed by PM2
 		pm2.list(function (err, apps) {
-			if (err) return console.error(err.stack || err);
-
-			proceed_file(process.env.HOME + '/.pm2/pm2.log', false);
-			proceed_file(process.env.HOME + '/.pm2/agent.log', false);
+			if (err) {
+				return console.error(err.stack || err);
+			}
 
 			var force = is_it_time_yet();
-			apps.forEach(function (app) { proceed_app(app, force) });
+			
+			Promise.map(apps, function (app) {
+				return proceed_app(app, force);
+			})
+			.then(function() {
+
+				return Promise.join(
+					proceed_file(process.env.HOME + '/.pm2/pm2.log', false),
+					proceed_file(process.env.HOME + '/.pm2/agent.log', false)
+				);
+			})
+			.then(function() {
+				if (currentConfig.rotation_mode === 'reopen') {
+					pm2.reloadLogs();
+				}
+			})
 		});
 	};
 

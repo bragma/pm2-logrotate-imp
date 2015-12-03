@@ -78,6 +78,14 @@ function parseDateFormat(prop, date_format) {
 	return date_format;
 }
 
+function parseRotationMode(prop, rotation_mode) {
+	if (rotation_mode !== 'copytruncate' || rotation_mode !== 'reopen') {
+		throw CreateError(prop, rotation_mode);
+	}
+	
+	return rotation_mode;
+}
+
 
 function parseConfig(conf) {
 
@@ -89,7 +97,8 @@ function parseConfig(conf) {
 		'interval': parseInterval,
 		'retain': parseRetain,
 		'date_mode': parseDateMode,
-		'date_format': parseDateFormat
+		'date_format': parseDateFormat,
+		'rotation_mode': parseRotationMode
 	};
 	
 	Object.keys(property_parsers).forEach(function(prop) {
