@@ -101,7 +101,7 @@ function processFile(file, force) {
 
 	// Rename the file or
 	// Copy the file content and truncate
-	return (currentConfig.rotation_mode === 'reopen'
+	return (currentConfig.rotation_mode === 'reload'
 		? fs.renameAsync(file, final_name)
 		: promisePipe(
 				fs.createReadStream(file),
@@ -186,7 +186,7 @@ pm2connectAsync()
 							);
 						})
 						.finally(function() {
-							if (currentConfig.rotation_mode === 'reopen') {
+							if (currentConfig.rotation_mode === 'reload') {
 								return pm2.reloadLogsAsync();
 							}
 						});
