@@ -61,7 +61,8 @@ function retainOrDeleteFiles(file, retain) {
 
 			// Delete all files
 			return Promise.map(to_delete, function(file) {
-				return fs.unlinkAsync(readPath + file)
+				file = readPath + file; 
+				return fs.unlinkAsync(file)
 					.then(function() {
 						console.log('"' + file + '" has been deleted');
 					})
