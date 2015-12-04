@@ -52,7 +52,7 @@ function parseRetain(prop, retain) {
 		return undefined;
 	}
 
-	var parsed_retain = parseInt(prop, retain);
+	var parsed_retain = parseInt(retain);
 	if (isNaN(parsed_retain) || parsed_retain < 0) {
 		throw CreateError(prop, retain);
 	}
