@@ -5,6 +5,7 @@ var Rolex = require('rolex');
 var path = require('path');
 var pmx = require('pmx');
 var pm2 = require('pm2');
+var pm2cst = require('pm2/constants');
 var util = require('util');
 
 var fs = Promise.promisifyAll(require('fs'));
@@ -188,10 +189,10 @@ pm2connectAsync()
 							
 							var conf = util._extend({}, currentConfig);
 							conf.rotation_mode = "copytruncate";
-							
+
 							return Promise.join(
-								checkAndRotate(process.env.HOME + '/.pm2/pm2.log', false, conf),
-								checkAndRotate(process.env.HOME + '/.pm2/agent.log', false, conf)
+								checkAndRotate(pm2cst.PM2_LOG_FILE_PATH, false, conf),
+								checkAndRotate(pm2cst.INTERACTOR_LOG_FILE_PATH, false, conf)
 							);
 						})
 						.finally(function() {

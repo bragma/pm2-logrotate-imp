@@ -35,9 +35,9 @@
 		"interval_unit": "d",
 		"interval": "1",
 		"max_size": "10M",
-		"retain": "none",
+		"retain": "7",
 		"date_mode": "system",
 		"date_format": "YYYY-MM-DD_HH-mm-ss",
-		"rotation_mode": "copytruncate"
+		"rotation_mode": "reload"
 	}
 }

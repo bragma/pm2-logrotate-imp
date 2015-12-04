@@ -29,12 +29,14 @@ logs are rotate using the "copytruncate" method.
 There are several values you can change in this module:
 
 - "interval_unit": A unit of time in the [formats supported by Moment.js](http://momentjs.com/docs/#/manipulating/add/). Default is 'd' (days).
-- "interval": An amount of time expressed in "interval_unit" units ather which files will be rotated. Default is 1.
+- "interval": An amount of time expressed in "interval_unit" units ather which files will be rotated. Default is 7.
 - "max_size": A maximum file size that will cause forced rotation of the files. Default is "10M".
 - "retain": Number of rotated files to retain, or 'none' to never delete files. Defaults to 'none'.
 - "date_mode": Date mode used in rotated file names. Valid values are 'utc' for UTC time or 'system' for local system time. Defaults to 'system'.
 - "date_format": A string in the [formats supported by Moment.js](http://momentjs.com/docs/#/displaying/format/). Default is 'YYYY-MM-DD_HH-mm-ss'
-- "rotation_mode": "copytruncate" or "reload". 
+- "rotation_mode": Changes the way log files are rotated, "copytruncate" or "reload". "copytruncate" creates a new file and copies content from the original log file.
+Once completed, the original log file is truncated. "reload" renames the original log file, then asks pm2 to restart logging. Since this does not involve
+copying data, it is faster. Default is "reload".
 
 
 After having installed the module:
