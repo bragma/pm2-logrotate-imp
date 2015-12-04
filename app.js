@@ -187,7 +187,7 @@ pm2connectAsync()
 						})
 						.finally(function() {
 							if (currentConfig.rotation_mode === 'reload') {
-								return pm2.reloadLogsAsync();
+								return pm2reloadLogsAsync();
 							}
 						});
 				})
