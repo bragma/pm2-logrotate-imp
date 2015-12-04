@@ -186,7 +186,7 @@ pm2connectAsync()
 							// to copytruncate method.
 							// See: https://github.com/Unitech/pm2/issues/800
 							
-							var conf = util.extend({}, currentConfig);
+							var conf = util._extend({}, currentConfig);
 							conf.rotation_mode = "copytruncate";
 							
 							return Promise.join(
