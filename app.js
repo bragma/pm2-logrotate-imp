@@ -93,7 +93,7 @@ function promisePipe(source, sink) {
 		}); 
 }
 
-function processFile(file) {
+function processFile(file, force) {
 	var file_name_date = currentConfig.date_mode === 'system' ? moment() : moment.utc();
 	var final_name = file.substr(0, file.length - 4) + '__'
 		+ file_name_date.format(currentConfig.date_format) + '.log';
@@ -110,7 +110,7 @@ function processFile(file) {
 			})
 		)
 		.then(function() {
-			console.log('"' + final_name + '" has been created');
+			console.log('"' + final_name + '" has been created ('+ (force ? 'time' : 'size') +' exceeded)');
 		})
 		.catch(function(err) {
 			console.error(err.stack || err);
@@ -131,7 +131,7 @@ function checkAndRotate(file, force) {
 			gl_file_list.push(file);
 			
 			if (force || stat.size >= currentConfig.max_size) {
-				return processFile(file);
+				return processFile(file, force);
 			}
 		})
 		.catch(function(err) {
@@ -189,9 +189,6 @@ pm2connectAsync()
 								return pm2.reloadLogsAsync();
 							}
 						});
-				})
-				.then(function() {
-					console.log("Rotation check completed");
 				})
 				.catch(function(err) {
 					console.error(err.stack || err);
