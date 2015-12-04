@@ -5,6 +5,7 @@ var Rolex = require('rolex');
 var path = require('path');
 var pmx = require('pmx');
 var pm2 = require('pm2');
+var util = require('util');
 
 var fs = Promise.promisifyAll(require('fs'));
 var pm2connectAsync = Promise.promisify(pm2.connect);
@@ -94,14 +95,14 @@ function promisePipe(source, sink) {
 		}); 
 }
 
-function processFile(file, force) {
-	var file_name_date = currentConfig.date_mode === 'system' ? moment() : moment.utc();
+function processFile(file, force, conf) {
+	var file_name_date = conf.date_mode === 'system' ? moment() : moment.utc();
 	var final_name = file.substr(0, file.length - 4) + '__'
-		+ file_name_date.format(currentConfig.date_format) + '.log';
+		+ file_name_date.format(conf.date_format) + '.log';
 
 	// Rename the file or
 	// Copy the file content and truncate
-	return (currentConfig.rotation_mode === 'reload'
+	return (conf.rotation_mode === 'reload'
 		? fs.renameAsync(file, final_name)
 		: promisePipe(
 				fs.createReadStream(file),
@@ -118,21 +119,21 @@ function processFile(file, force) {
 		})
 		.finally(function() {
 			// Either we failed or succeded, check if rotated files need to be deleted
-			if (currentConfig.retain !== undefined) {
-				return retainOrDeleteFiles(file, currentConfig.retain);
+			if (conf.retain !== undefined) {
+				return retainOrDeleteFiles(file, conf.retain);
 			}
 		});
 
 }
 
-function checkAndRotate(file, force) {
+function checkAndRotate(file, force, conf) {
 	
 	return fs.statAsync(file)
 		.then(function(stat) {
 			gl_file_list.push(file);
 			
-			if (force || stat.size >= currentConfig.max_size) {
-				return processFile(file, force);
+			if (force || stat.size >= conf.max_size) {
+				return processFile(file, force, conf);
 			}
 		})
 		.catch(function(err) {
@@ -143,21 +144,21 @@ function checkAndRotate(file, force) {
 		});
 }
 
-function checkAndRotateAppfiles(app, force) {
+function checkAndRotateAppfiles(app, force, conf) {
 	// Get error and out file
 	var out_file = app.pm2_env.pm_out_log_path;
 	var err_file = app.pm2_env.pm_err_log_path;
 
 	return Promise.join(
-		checkAndRotate(out_file, force),
-		checkAndRotate(err_file, force)
+		checkAndRotate(out_file, force, conf),
+		checkAndRotate(err_file, force, conf)
 	);
 }
 
-function is_it_time_yet() {
-	var NOW = moment().startOf(currentConfig.interval_unit);
+function is_it_time_yet(conf) {
+	var NOW = moment().startOf(conf.interval_unit);
 
-	if (NOW.diff(BEGIN, currentConfig.interval_unit) >= currentConfig.interval) {
+	if (NOW.diff(BEGIN, conf.interval_unit) >= conf.interval) {
 		BEGIN = NOW;
 		return true;
 	}
@@ -174,15 +175,23 @@ pm2connectAsync()
 			// Get process list managed by PM2
 			pm2listAsync()
 				.then(function(apps) {
-					var force = is_it_time_yet();
+					var force = is_it_time_yet(currentConfig);
 					
 					return Promise.map(apps, function (app) {
-							return checkAndRotateAppfiles(app, force);
+							return checkAndRotateAppfiles(app, force, currentConfig);
 						})
 						.finally(function() {
+							
+							// HACK: Since pm2 does not reload its own logs, we have to fallback
+							// to copytruncate method.
+							// See: https://github.com/Unitech/pm2/issues/800
+							
+							var conf = util.extend({}, currentConfig);
+							conf.rotation_mode = "copytruncate";
+							
 							return Promise.join(
-								checkAndRotate(process.env.HOME + '/.pm2/pm2.log', false),
-								checkAndRotate(process.env.HOME + '/.pm2/agent.log', false)
+								checkAndRotate(process.env.HOME + '/.pm2/pm2.log', false, conf),
+								checkAndRotate(process.env.HOME + '/.pm2/agent.log', false, conf)
 							);
 						})
 						.finally(function() {

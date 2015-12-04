@@ -15,6 +15,15 @@ Tested on node-5.10.x, requires pm2.
   pm2 install pm2-logrotate-imp
 ```
 
+## Improved rotation
+
+<b>Lower memory footprint, less CPU usage and quicker rotations</b>
+
+This rotator can use pm2's reloadLogs to handle log files without copying content. Use "rotation_mode" configuration property to enable it.
+
+Notice that due to [this issue](https://github.com/Unitech/pm2/issues/800), pm2 does not rotate its own logs. As a workaround, pm2's own
+logs are rotate using the "copytruncate" method.
+
 ## Configuration
 
 There are several values you can change in this module:
@@ -25,6 +34,8 @@ There are several values you can change in this module:
 - "retain": Number of rotated files to retain, or 'none' to never delete files. Defaults to 'none'.
 - "date_mode": Date mode used in rotated file names. Valid values are 'utc' for UTC time or 'system' for local system time. Defaults to 'system'.
 - "date_format": A string in the [formats supported by Moment.js](http://momentjs.com/docs/#/displaying/format/). Default is 'YYYY-MM-DD_HH-mm-ss'
+- "rotation_mode": "copytruncate" or "reload". 
+
 
 After having installed the module:
 
