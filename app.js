@@ -57,11 +57,11 @@ function retainOrDeleteFiles(file, retain) {
 
 			// Retain the specified amount of files
 			// Keep in the array the files to be deleted
-			rotated_files.splice(retain);
+			var to_delete = rotated_files.splice(retain);
 
 			// Delete all files
-			return Promise.all(rotated_files, function(file) {
-				return fs.unlinkAsync(file)
+			return Promise.map(to_delete, function(file) {
+				return fs.unlinkAsync(readPath + file)
 					.then(function() {
 						console.log('"' + file + '" has been deleted');
 					})
