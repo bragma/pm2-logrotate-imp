@@ -1,11 +1,15 @@
 var Promise = require('bluebird');
-var fs = Promise.promisifyAll(require('fs'));
-var path = require('path');
-var pmx = require('pmx');
-var pm2 = require('pm2');
 var moment = require('moment');
 var Rolex = require('rolex');
 
+var path = require('path');
+var pmx = require('pmx');
+var pm2 = require('pm2');
+
+var fs = Promise.promisifyAll(require('fs'));
+var pm2connectAsync = Promise.promisify(pm2.connect);
+var pm2listAsync = Promise.promisify(pm2.list);
+var pm2reloadLogsAsync = Promise.promisify(pm2.reloadLogs);
 
 var Config = require('./config');
 
@@ -37,24 +41,37 @@ var currentConfig = Config.parse(moduleConfig);
 var BEGIN = moment().startOf(currentConfig.interval_unit);
 var gl_file_list = [];
 
-function delete_old(file, retain) {
+
+function retainOrDeleteFiles(file, retain) {
 	var fileBaseName = file.substr(0, file.length - 4) + '__';
 	var readPath = path.join(path.dirname(fileBaseName), "/");
 
 	return fs.readdirAsync(readPath)
 		.then(function(files) {
+			// Filter in only old rotated files
+			// Sort them by name - This may be totally incorrect if the date is not sortable
+			// Reverse the sorting order
 			var rotated_files = files.filter(function(file) {
 				return fileBaseName === (readPath + file).substr(0, fileBaseName.length); 
 			}).sort().reverse();
 
+			// Retain the specified amount of files
+			// Keep in the array the files to be deleted
 			rotated_files.splice(retain);
 
+			// Delete all files
 			return Promise.all(rotated_files, function(file) {
 				return fs.unlinkAsync(file)
 					.then(function() {
 						console.log('"' + file + '" has been deleted');
+					})
+					.catch(function(err) {
+						console.error(err.stack || err);
 					});
 			});		
+		})
+		.catch(function(err) {
+			console.error(err.stack || err);
 		});
 }
 
@@ -76,71 +93,63 @@ function promisePipe(source, sink) {
 		}); 
 }
 
-function proceed(file) {
+function processFile(file) {
 	var file_name_date = currentConfig.date_mode === 'system' ? moment() : moment.utc();
 	var final_name = file.substr(0, file.length - 4) + '__'
 		+ file_name_date.format(currentConfig.date_format) + '.log';
 
-	var rotateOp;
-	if (currentConfig.rotation_mode === 'reopen') {
-		rotateOp = fs.renameAsync(file, final_name);
-	} else {
-		rotateOp = promisePipe(
+	// Rename the file or
+	// Copy the file content and truncate
+	(currentConfig.rotation_mode === 'reopen'
+		? fs.renameAsync(file, final_name)
+		: promisePipe(
 				fs.createReadStream(file),
-				fs.createWriteStream(final_name, { 'flags': 'a' }))
-			.then(function() {
+				fs.createWriteStream(final_name, { 'flags': 'a' })
+			).then(function() {
 				return fs.truncateAsync(file, 0);
-			});
-	}
-	
-	return rotateOp
+			})
+		)
 		.then(function() {
 			console.log('"' + final_name + '" has been created');
-
+		})
+		.catch(function(err) {
+			console.error(err.stack || err);
+		})
+		.finally(function() {
+			// Either we failed or succeded, check if rotated files need to be deleted
 			if (currentConfig.retain !== undefined) {
-				return delete_old(file, currentConfig.retain);
+				return retainOrDeleteFiles(file, currentConfig.retain);
 			}
-			
-			return Promise.resolve();
 		});
+
 }
 
-function proceed_file(file, force) {
+function checkAndRotate(file, force) {
 	
-	return fs.existsAsync(file)
-		.then(function(exists) {
-			if (!exists) {
-				return Promise.resolve(false);
-			}
-				
+	return fs.statAsync(file)
+		.then(function(stat) {
 			gl_file_list.push(file);
 			
-			if (force) {
-				return proceed(file)
-					.return(true);
+			if (force || stat.size >= currentConfig.max_size) {
+				return processFile(file);
 			}
-			
-			return fs.statAsync(file)
-				.get('size')
-				.then(function(size) {
-					if (size < currentConfig.max_size) {
-						return Promise.resolve(false);
-					}
-					
-					return proceed(file)
-						.return(true);
-				});
+		})
+		.catch(function(err) {
+			// We can ignore missing files here
+			if (err.code !== "ENOENT") {
+				console.error(err.stack || err);
+			}
 		});
 }
 
-function proceed_app(app, force) {
+function checkAndRotateAppfiles(app, force) {
 	// Get error and out file
 	var out_file = app.pm2_env.pm_out_log_path;
 	var err_file = app.pm2_env.pm_err_log_path;
 
 	return Promise.join(
-		proceed_file(out_file, force),
-		proceed_file(err_file, force)
+		checkAndRotate(out_file, force),
+		checkAndRotate(err_file, force)
 	);
 }
 
@@ -157,43 +166,50 @@ function is_it_time_yet() {
 }
 
 // Connect to local PM2
-pm2.connect(function (err) {
-	if (err) return console.error(err.stack || err);
-
-	function worker() {
-		// Get process list managed by PM2
-		pm2.list(function (err, apps) {
-			if (err) {
-				return console.error(err.stack || err);
-			}
-
-			var force = is_it_time_yet();
-			
-			Promise.map(apps, function (app) {
-				return proceed_app(app, force);
-			})
-			.then(function() {
-
-				return Promise.join(
-					proceed_file(process.env.HOME + '/.pm2/pm2.log', false),
-					proceed_file(process.env.HOME + '/.pm2/agent.log', false)
-				);
-			})
-			.then(function() {
-				if (currentConfig.rotation_mode === 'reopen') {
-					pm2.reloadLogs();
-				}
-			})
-		});
-	};
-
-	setTimeout(function () {
-		setInterval(function () {
-			gl_file_list = [];
-			worker();
-		}, WORKER_INTERVAL);
-	}, (WORKER_INTERVAL - (Date.now() % WORKER_INTERVAL)));
-});
+pm2connectAsync()
+	.then(function() {
+		
+		function worker() {
+			// Get process list managed by PM2
+			pm2listAsync()
+				.then(function(apps) {
+					var force = is_it_time_yet();
+					
+					return Promise.map(apps, function (app) {
+							return checkAndRotateAppfiles(app, force);
+						})
+						.finally(function() {
+							return Promise.join(
+								checkAndRotate(process.env.HOME + '/.pm2/pm2.log', false),
+								checkAndRotate(process.env.HOME + '/.pm2/agent.log', false)
+							);
+						})
+						.finally(function() {
+							if (currentConfig.rotation_mode === 'reopen') {
+								return pm2.reloadLogsAsync();
+							}
+						});
+				})
+				.then(function() {
+					console.log("Rotation check completed");
+				})
+				.catch(function(err) {
+					console.error(err.stack || err);
+				});
+		}
+	
+		setTimeout(function () {
+			setInterval(function () {
+				gl_file_list = [];
+				worker();
+			}, WORKER_INTERVAL);
+		}, (WORKER_INTERVAL - (Date.now() % WORKER_INTERVAL)));
+		
+		
+	})
+	.catch(function(err) {
+		console.error(err.stack || err);
+	});
 
 pmx.action('list files', function (reply) {
 	return reply(gl_file_list);

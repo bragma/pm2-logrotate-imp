@@ -79,7 +79,7 @@ function parseDateFormat(prop, date_format) {
 }
 
 function parseRotationMode(prop, rotation_mode) {
-	if (rotation_mode !== 'copytruncate' || rotation_mode !== 'reopen') {
+	if (rotation_mode !== 'copytruncate' && rotation_mode !== 'reopen') {
 		throw CreateError(prop, rotation_mode);
 	}
 	
