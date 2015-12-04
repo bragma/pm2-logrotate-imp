@@ -100,7 +100,7 @@ function processFile(file) {
 
 	// Rename the file or
 	// Copy the file content and truncate
-	(currentConfig.rotation_mode === 'reopen'
+	return (currentConfig.rotation_mode === 'reopen'
 		? fs.renameAsync(file, final_name)
 		: promisePipe(
 				fs.createReadStream(file),
