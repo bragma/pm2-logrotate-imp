@@ -1,6 +1,6 @@
 {
   "name": "pm2-logrotate-imp",
-  "version": "0.4.0",
+  "version": "0.6.0",
   "description": "pm2 module - configurable log rotator",
   "main": "app.js",
   "dependencies": {
